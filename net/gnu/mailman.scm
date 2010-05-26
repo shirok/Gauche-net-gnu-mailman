@@ -61,7 +61,7 @@
       (set! (~ mailman'cookie) (m 1))
       #t)))
 
-(define-method mailman-subscribe ((mailman <mailman>) . addresses)
+(define-method mailman-subscribe ((mailman <mailman>) addresses)
   (receive (status headers body)
       (http-post (~ mailman'server)
                  #`",(~ mailman'admin-path)/,(~ mailman'name)/members/add"                   
@@ -81,7 +81,7 @@
            (log-format "mailman-subscribe body: ~a" body)
            #f])))
                  
-(define-method mailman-unsubscribe ((mailman <mailman>) . addresses)
+(define-method mailman-unsubscribe ((mailman <mailman>) addresses)
   (receive (status headers body)
       (http-post (ref mailman 'server)
                  #`",(~ mailman'admin-path)/,(~ mailman'name)/members/remove"

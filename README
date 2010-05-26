@@ -4,8 +4,8 @@ This module directly accesses and scrapes Mailman's web interface,
 so it may cease to work if their page design and/or form parameters
 change.
 
-I hacked up this code out of necessity, but it's been working
-since 2005.
+I hacked up this code out of necessity several years ago, and it's
+been working so far and it seems useful in general.
 
 
 Usage:
@@ -22,10 +22,10 @@ Usage:
    (error "login failed"))
 
  ;; Add addresses to ML
- (mailman-subscribe ml "foo@example.com" "bar@example.org" ...)
+ (mailman-subscribe ml '("foo@example.com" "bar@example.org" ...))
 
  ;; Remove addresses from ML
- (mailman-unsubscribe ml "foo@example.com" "bar@example.org" ...)
+ (mailman-unsubscribe ml '("foo@example.com" "bar@example.org" ...))
 
 
 Notes:

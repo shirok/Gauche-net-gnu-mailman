@@ -1,0 +1,44 @@
+Add/remove subscribers to/from a mailing list managed by GNU Mailman.
+
+This module directly accesses and scrapes Mailman's web interface,
+so it may cease to work if their page design and/or form parameters
+change.
+
+I hacked up this code out of necessity, but it's been working
+since 2005.
+
+This assumes mailman's admin.cgi is visible directly under
+the server name.   It might be useful to make it configurable.
+
+
+Usage:
+
+ (use net.gnu.mailman)
+
+ (define ml (make <mailman>
+               :server "example.org"
+               :name "my-mailing-list"     ;; ML name
+               :password "adminpassword")) ;; admin password
+
+ (unless (mailman-login ml)
+   (error "login failed"))
+
+ ;; Add addresses to ML
+ (mailman-subscribe ml "foo@example.com" "bar@example.org" ...)
+
+ ;; Remove addresses from ML
+ (mailman-unsubscribe ml "foo@example.com" "bar@example.org" ...)
+
+
+Notes:
+
+mailman-login, mailman-subscribe and mailman-unsubscribe all return #t
+on success, #f on failure.  On failure, the status code and the body
+of server response are recorded by the default log drain (see
+gauche.logger).  On success, the addresses are logged.
+
+It may be a good idea to raise an exception on failure, and
+let the application handles the logging.
+
+
+ 

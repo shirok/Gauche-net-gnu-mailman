@@ -7,9 +7,6 @@ change.
 I hacked up this code out of necessity, but it's been working
 since 2005.
 
-This assumes mailman's admin.cgi is visible directly under
-the server name.   It might be useful to make it configurable.
-
 
 Usage:
 
@@ -17,6 +14,7 @@ Usage:
 
  (define ml (make <mailman>
                :server "example.org"
+               :admin-path "/admin"        ;; path to the admin cgi script
                :name "my-mailing-list"     ;; ML name
                :password "adminpassword")) ;; admin password
 

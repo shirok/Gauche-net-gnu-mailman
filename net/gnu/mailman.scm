@@ -31,6 +31,7 @@
 (define-module net.gnu.mailman
   (use rfc.http)
   (use rfc.uri)
+  (use rfc.cookie)
   (use gauche.logger)
   (export <mailman> mailman-login mailman-subscribe mailman-unsubscribe)
   )
@@ -40,98 +41,64 @@
   ((server   :init-keyword :server)     ; listserver name
    (name     :init-keyword :name)       ; list name
    (password :init-keyword :password)   ; admin password
+   (admin-path :init-keyword :admin-path :init-value "/admin.cgi")
+   (secure   :init-keyword :secure :init-value #f)
    (cookie   :init-value #f)))
 
 (define-method mailman-login ((mailman <mailman>))
   (receive (status headers body)
-      (http-post (ref mailman 'server)
-                 #`"/admin.cgi/,(ref mailman 'name)"
-                 #`"adminpw=,(ref mailman 'password);admlogin=Let me in...")
+      (http-post (~ mailman'server)
+                 #`",(~ mailman'admin-path)/,(~ mailman'name)"
+                 `(("adminpw" ,(~ mailman'password))
+                   ("admlogin" "Let me in..."))
+                 :secure (~ mailman'secure))
     (unless (equal? status "200")
       (log-format "mailman-login status: ~a" status)
       (log-format "mailman-login body: ~a" body))
-    (and-let* ((p (assoc "set-cookie" headers))
-               (rx (string->regexp #`",(ref mailman 'name)\\+admin=([^;]+)"))
-               (m  (rx (cadr p))))
-      (set! (ref mailman 'cookie) (m 1))
+    (and-let* ([p (assoc "set-cookie" headers)]
+               [rx (string->regexp #`",(regexp-quote (~ mailman'name))\\+admin=([^;]+)")]
+               [m  (rx (cadr p))])
+      (set! (~ mailman'cookie) (m 1))
       #t)))
 
 (define-method mailman-subscribe ((mailman <mailman>) . addresses)
-  (let ((uri #`"/admin.cgi/,(ref mailman 'name)/members/add")
-        (data `(""
-                "--boundary"
-                "Content-disposition: form-data; name=\"subscribe_or_invite\""
-                ""
-                "0"
-                "--boundary"
-                "Content-disposition: form-data; name=\"send_welcome_msg_to_this_batch\""
-                ""
-                "0"
-                "--boundary"
-                "Content-disposition: form-data; name=\"send_notifications_to_list_owner\""
-                ""
-                "1"
-                "--boundary"
-                "Content-disposition: form-data; name=\"subscribees\""
-                ""
-                ,@addresses
-                ""
-                "--boundary"
-                "Content-disposition: form-data; name=\"invitation\""
-                ""
-                ""
-                "--boundary"
-                "Content-disposition: form-data; name=\"setmemberopts_btn\""
-                ""
-                "Submit Your Changes"
-                "--boundary--"))
-        (cookie #`"$Version=1;,(ref mailman 'name)+admin=,(ref mailman 'cookie);$Path=/"))
-    (receive (status headers body)
-        (http-post (ref mailman 'server) uri
-                   (string-join data "\r\n" 'suffix)
-                   :mime-version "1.0"
-                   :content-type "multipart/form-data; boundary=boundary"
-                   :cookie cookie)
-      (cond ((equal? status "200")
-             (log-format "mailman-subscribe OK: ~a" addresses)
-             #t)
-            (else
-             (log-format "mailman-subscribe status: ~a" status)
-             (log-format "mailman-subscribe body: ~a" body)
-             #f)))))
+  (receive (status headers body)
+      (http-post (~ mailman'server)
+                 #`",(~ mailman'admin-path)/,(~ mailman'name)/members/add"                   
+                 `(("subscribe_or_invite" "0")
+                   ("send_welcome_msg_to_this_batch" "0")
+                   ("send_notifications_to_list_owner" "1")
+                   ("subscribees" ,(string-join addresses "\r\n" 'suffix))
+                   ("invitation" "")
+                   ("setmemberopts_btn" "Submit Your Changes"))
+                 :mime-version "1.0"
+                 :cookie (session-cookie mailman))
+    (cond [(equal? status "200")
+           (log-format "mailman-subscribe OK: ~a" addresses)
+           #t]
+          [else
+           (log-format "mailman-subscribe status: ~a" status)
+           (log-format "mailman-subscribe body: ~a" body)
+           #f])))
                  
 (define-method mailman-unsubscribe ((mailman <mailman>) . addresses)
-  (let ((uri #`"/admin.cgi/,(ref mailman 'name)/members/remove")
-        (data `(""
-                "--boundary"
-                "Content-disposition: form-data; name=\"send_unsub_ack_to_this_batch\""
-                ""
-                "0"
-                "--boundary"
-                "Content-disposition: form-data; name=\"send_unsub_notifications_to_list_owner\""
-                ""
-                "0"
-                "--boundary"
-                "Content-disposition: form-data; name=\"unsubscribees\""
-                ""
-                ,@addresses
-                ""
-                "--boundary"
-                "Content-disposition: form-data; name=\"setmemberopts_btn\""
-                ""
-                "Submit Your Changes"
-                "--boundary--"))
-        (cookie #`"$Version=1;,(ref mailman 'name)+admin=,(ref mailman 'cookie);$Path=/"))
-    (receive (status headers body)
-        (http-post (ref mailman 'server) uri
-                   (string-join data "\r\n" 'suffix)
-                   :mime-version "1.0"
-                   :content-type "multipart/form-data; boundary=boundary"
-                   :cookie cookie)
-      (cond ((equal? status "200")
-             (log-format "mailman-unsubscribe OK: ~a" addresses)
-             #t)
-            (else
-             (log-format "mailman-unsubscribe status: ~a" status)
-             (log-format "mailman-unsubscribe body: ~a" body)
-             #f)))))
+  (receive (status headers body)
+      (http-post (ref mailman 'server)
+                 #`",(~ mailman'admin-path)/,(~ mailman'name)/members/remove"
+                 `(("send_unsub_ack_to_this_batch" "0")
+                   ("send_unsub_notifications_to_list_owner" "0")
+                   ("unsubscribees" ,(string-join addresses "\r\n" 'suffix))
+                   ("setmemberopts_btn" "Submit Your Changes"))
+                 :cookie (session-cookie mailman))
+    (cond [(equal? status "200")
+           (log-format "mailman-unsubscribe OK: ~a" addresses)
+           #t]
+          [else
+           (log-format "mailman-unsubscribe status: ~a" status)
+           (log-format "mailman-unsubscribe body: ~a" body)
+           #f])))
+
+(define-method session-cookie ((mailman <mailman>))
+  (unless (~ mailman'cookie)
+    (error "mailman session hasn't logged in"))
+  #`"$Version=1;,(~ mailman'name)+admin=,(~ mailman'cookie);$Path=/")

@@ -48,7 +48,7 @@
 (define-method mailman-login ((mailman <mailman>))
   (receive (status headers body)
       (http-post (~ mailman'server)
-                 #`",(~ mailman'admin-path)/,(~ mailman'name)"
+                 #"~(~ mailman'admin-path)/~(~ mailman'name)"
                  `(("adminpw" ,(~ mailman'password))
                    ("admlogin" "Let me in..."))
                  :secure (~ mailman'secure))
@@ -56,7 +56,7 @@
       (log-format "mailman-login status: ~a" status)
       (log-format "mailman-login body: ~a" body))
     (and-let* ([p (assoc "set-cookie" headers)]
-               [rx (string->regexp #`",(regexp-quote (~ mailman'name))\\+admin=([^;]+)")]
+               [rx (string->regexp #"~(regexp-quote (~ mailman'name))\\+admin=([^;]+)")]
                [m  (rx (cadr p))])
       (set! (~ mailman'cookie) (m 1))
       #t)))
@@ -64,7 +64,7 @@
 (define-method mailman-subscribe ((mailman <mailman>) addresses)
   (receive (status headers body)
       (http-post (~ mailman'server)
-                 #`",(~ mailman'admin-path)/,(~ mailman'name)/members/add"
+                 #"~(~ mailman'admin-path)/~(~ mailman'name)/members/add"
                  `(("subscribe_or_invite" "0")
                    ("send_welcome_msg_to_this_batch" "0")
                    ("send_notifications_to_list_owner" "1")
@@ -84,7 +84,7 @@
 (define-method mailman-unsubscribe ((mailman <mailman>) addresses)
   (receive (status headers body)
       (http-post (ref mailman 'server)
-                 #`",(~ mailman'admin-path)/,(~ mailman'name)/members/remove"
+                 #"~(~ mailman'admin-path)/~(~ mailman'name)/members/remove"
                  `(("send_unsub_ack_to_this_batch" "0")
                    ("send_unsub_notifications_to_list_owner" "0")
                    ("unsubscribees" ,(string-join addresses "\r\n" 'suffix))
@@ -101,4 +101,4 @@
 (define-method session-cookie ((mailman <mailman>))
   (unless (~ mailman'cookie)
     (error "mailman session hasn't logged in"))
-  #`"$Version=1;,(~ mailman'name)+admin=,(~ mailman'cookie);$Path=/")
+  #"$Version=1;~(~ mailman'name)+admin=~(~ mailman'cookie);$Path=/")

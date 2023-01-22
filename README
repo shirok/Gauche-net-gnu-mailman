@@ -37,6 +37,3 @@ gauche.logger).  On success, the addresses are logged.
 
 It may be a good idea to raise an exception on failure, and
 let the application handles the logging.
-
-
- 

@@ -64,7 +64,7 @@
 (define-method mailman-subscribe ((mailman <mailman>) addresses)
   (receive (status headers body)
       (http-post (~ mailman'server)
-                 #`",(~ mailman'admin-path)/,(~ mailman'name)/members/add"                   
+                 #`",(~ mailman'admin-path)/,(~ mailman'name)/members/add"
                  `(("subscribe_or_invite" "0")
                    ("send_welcome_msg_to_this_batch" "0")
                    ("send_notifications_to_list_owner" "1")
@@ -80,7 +80,7 @@
            (log-format "mailman-subscribe status: ~a" status)
            (log-format "mailman-subscribe body: ~a" body)
            #f])))
-                 
+
 (define-method mailman-unsubscribe ((mailman <mailman>) addresses)
   (receive (status headers body)
       (http-post (ref mailman 'server)

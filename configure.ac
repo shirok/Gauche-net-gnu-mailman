@@ -70,4 +70,3 @@ $GAUCHE_PACKAGE make-gpd "$PACKAGE_NAME" \
 dnl Output
 echo $PACKAGE_VERSION > VERSION
 AC_OUTPUT(Makefile)
-

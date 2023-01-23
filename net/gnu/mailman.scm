@@ -34,7 +34,8 @@
   (use rfc.cookie)
   (use gauche.logger)
   (use sxml.ssax)
-  (export <mailman> mailman-login
+  (use file.util)
+  (export <mailman> mailman-login mailman-logged-in?
           mailman-subscribe mailman-unsubscribe mailman-list)
   )
 (select-module net.gnu.mailman)
@@ -63,6 +64,10 @@
                [m  (rx (cadr p))])
       (set! (~ mailman'cookie) (m 1))
       #t)))
+
+;; API
+(define-method mailman-logged-in? ((mailman <mailman>))
+  (boolean (~ mailman'cookie)))
 
 (define-method get-csrf-token ((mailman <mailman>) path)
   (receive (status headers body)

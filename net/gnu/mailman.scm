@@ -33,7 +33,9 @@
   (use rfc.uri)
   (use rfc.cookie)
   (use gauche.logger)
-  (export <mailman> mailman-login mailman-subscribe mailman-unsubscribe)
+  (use sxml.ssax)
+  (export <mailman> mailman-login
+          mailman-subscribe mailman-unsubscribe mailman-list)
   )
 (select-module net.gnu.mailman)
 
@@ -45,6 +47,7 @@
    (secure   :init-keyword :secure :init-value #f)
    (cookie   :init-value #f)))
 
+;; API
 (define-method mailman-login ((mailman <mailman>))
   (receive (status headers body)
       (http-post (~ mailman'server)
@@ -61,42 +64,97 @@
       (set! (~ mailman'cookie) (m 1))
       #t)))
 
-(define-method mailman-subscribe ((mailman <mailman>) addresses)
+(define-method get-csrf-token ((mailman <mailman>) path)
   (receive (status headers body)
-      (http-post (~ mailman'server)
-                 #"~(~ mailman'admin-path)/~(~ mailman'name)/members/add"
-                 `(("subscribe_or_invite" "0")
-                   ("send_welcome_msg_to_this_batch" "0")
-                   ("send_notifications_to_list_owner" "1")
-                   ("subscribees" ,(string-join addresses "\r\n" 'suffix))
-                   ("invitation" "")
-                   ("setmemberopts_btn" "Submit Your Changes"))
-                 :mime-version "1.0"
-                 :cookie (session-cookie mailman))
+      (http-get (~ mailman'server)
+                #"~(~ mailman'admin-path)/~(~ mailman'name)~path"
+                :secure (~ mailman'secure)
+                :cookie (session-cookie mailman))
     (cond [(equal? status "200")
-           (log-format "mailman-subscribe OK: ~a" addresses)
-           #t]
+           (and-let1 line (find #/"csrf_token"/ (string-split body "\n"))
+             (rxmatch->string #/value="(\w*)"/ line 1))]
           [else
-           (log-format "mailman-subscribe status: ~a" status)
-           (log-format "mailman-subscribe body: ~a" body)
+           (log-format "mailman get-csrf-token status: ~a" status)
+           (log-format "mailman get-csrf-token body: ~a" body)
            #f])))
 
+;; API
+;;  Addresses can be a single email address, or a list of email addresses
+;;  (ugly, but for the compatibility)
+(define-method mailman-subscribe ((mailman <mailman>) addresses)
+  (and-let1 token (get-csrf-token mailman "/members/add")
+    (receive (status headers body)
+        (http-post (~ mailman'server)
+                   #"~(~ mailman'admin-path)/~(~ mailman'name)/members/add"
+                   `(("csrf_token" ,token)
+                     ("subscribe_or_invite" "0")
+                     ("send_welcome_msg_to_this_batch" "0")
+                     ("send_notifications_to_list_owner" "1")
+                     ("subscribees" ,(concat-addresses addresses))
+                     ("invitation" "")
+                     ("setmemberopts_btn" "Submit Your Changes"))
+                   :mime-version "1.0"
+                   :secure (~ mailman'secure)
+                   :cookie (session-cookie mailman))
+      (cond [(equal? status "200")
+             (log-format "mailman-subscribe OK: ~a" addresses)
+             #t]
+            [else
+             (log-format "mailman-subscribe status: ~a" status)
+             (log-format "mailman-subscribe body: ~a" body)
+             #f]))))
+
+;; API
+;;  Addresses can be a single email address, or a list of email addresses
+;;  (ugly, but for the compatibility)
 (define-method mailman-unsubscribe ((mailman <mailman>) addresses)
-  (receive (status headers body)
-      (http-post (ref mailman 'server)
-                 #"~(~ mailman'admin-path)/~(~ mailman'name)/members/remove"
-                 `(("send_unsub_ack_to_this_batch" "0")
-                   ("send_unsub_notifications_to_list_owner" "0")
-                   ("unsubscribees" ,(string-join addresses "\r\n" 'suffix))
-                   ("setmemberopts_btn" "Submit Your Changes"))
-                 :cookie (session-cookie mailman))
-    (cond [(equal? status "200")
-           (log-format "mailman-unsubscribe OK: ~a" addresses)
-           #t]
-          [else
-           (log-format "mailman-unsubscribe status: ~a" status)
-           (log-format "mailman-unsubscribe body: ~a" body)
-           #f])))
+  (and-let1 token (get-csrf-token mailman "/members/remove")
+    (receive (status headers body)
+        (http-post (~ mailman 'server)
+                   #"~(~ mailman'admin-path)/~(~ mailman'name)/members/remove"
+                   `(("csrf_token" ,token)
+                     ("send_unsub_ack_to_this_batch" "0")
+                     ("send_unsub_notifications_to_list_owner" "0")
+                     ("unsubscribees" ,(concat-addresses addresses))
+                     ("setmemberopts_btn" "Submit Your Changes"))
+                   :mime-version "1.0"
+                   :secure (~ mailman'secure)
+                   :cookie (session-cookie mailman))
+      (cond [(equal? status "200")
+             (log-format "mailman-unsubscribe OK: ~a" addresses)
+             #t]
+            [else
+             (log-format "mailman-unsubscribe status: ~a" status)
+             (log-format "mailman-unsubscribe body: ~a" body)
+             #f]))))
+
+;; API
+(define-method mailman-list ((mailman <mailman>))
+  (define (fetch letter)
+    (receive (status headers body)
+        (http-get (~ mailman'server)
+                  `(,(build-path (~ mailman'admin-path)
+                                 (~ mailman'name)
+                                 "members" "list")
+                    ("letter" ,letter))
+                  :secure (~ mailman'secure)
+                  :cookie (session-cookie mailman))
+      (cond [(equal? status "200")
+             (filter-map (^[line]
+                           (rxmatch->string #/options\.cgi.*>(.*?)<\/a/ line 1))
+                         (string-split body "\n"))]
+            [else
+             (log-format "mailman-list status: ~a" status)
+             (log-format "mailman-list body: ~a" body)
+             (raise 'fetch-failed)])))
+  (guard (e [(eq? e 'fetch-failed) #f])
+    (append-map fetch (string->list "abcdefghijklmnopqrtsuvwxyz"))))
+
+(define (concat-addresses addresses)
+  (string-join (if (string? addresses)
+                 (list addresses)
+                 addresses)
+               "\r\n" 'suffix))
 
 (define-method session-cookie ((mailman <mailman>))
   (unless (~ mailman'cookie)

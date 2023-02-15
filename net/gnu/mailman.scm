@@ -33,7 +33,6 @@
   (use rfc.uri)
   (use rfc.cookie)
   (use gauche.logger)
-  (use sxml.ssax)
   (use file.util)
   (export <mailman> mailman-login mailman-logged-in?
           mailman-subscribe mailman-unsubscribe mailman-list)

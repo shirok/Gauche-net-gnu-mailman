@@ -1,2 +1,4 @@
 /VERSION
 /DIST_EXCLUDE_X
+Makefile
+*.log

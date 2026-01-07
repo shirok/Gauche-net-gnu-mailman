@@ -8,8 +8,7 @@
 
   ;; Description of the package.  The first line is used as a short
   ;; summary.
-  :description "Sample package.scm\n\
-                Write your package description here."
+  :description "A utility library to interact with GNU mailman."
 
   ;; List of dependencies.
   ;; Example:
